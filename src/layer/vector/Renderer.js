@@ -129,11 +129,21 @@ export var Renderer = Layer.extend({
 		// Update pixel bounds of renderer container (for positioning/sizing/clipping later)
 		// Subclasses are responsible of firing the 'update' event.
 		var p = this.options.padding,
-		    size = this._map.getSize(),
-		    min = this._map.containerPointToLayerPoint(size.multiplyBy(-p)).round();
+			  map = this._map,
+			  size = this._map.getSize(),
+		    padMin = size.multiplyBy(-p),
+		    padMax = size.multiplyBy(1 + p),
+		    // TODO: Somehow refactor this out into map.something() - the code is
+		    // pretty much the same as in GridLayer.
+		    clip = new Bounds([
+		        map.containerPointToLayerPoint([padMin.x, padMin.y]).floor(),
+		        map.containerPointToLayerPoint([padMin.x, padMax.y]).floor(),
+		        map.containerPointToLayerPoint([padMax.x, padMin.y]).floor(),
+		        map.containerPointToLayerPoint([padMax.x, padMax.y]).floor()
+		    ]);
 
-		this._bounds = new Bounds(min, min.add(size.multiplyBy(1 + p * 2)).round());
-
+		this._bounds = clip;
+		this._topLeft = this._map.layerPointToLatLng(clip.min);
 		this._center = this._map.getCenter();
 		this._zoom = this._map.getZoom();
 	}

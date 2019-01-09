@@ -11,6 +11,10 @@ import {ScrollWheelZoom} from './handler/Map.ScrollWheelZoom';
 Map.ScrollWheelZoom = ScrollWheelZoom;
 import {Tap} from './handler/Map.Tap';
 Map.Tap = Tap;
+import {TouchGestures} from './handler/Map.TouchGestures';
+Map.TouchGestures = TouchGestures;
+import {TouchRotate} from './handler/Map.TouchRotate';
+Map.TouchRotate = TouchRotate;
 import {TouchZoom} from './handler/Map.TouchZoom';
 Map.TouchZoom = TouchZoom;
 

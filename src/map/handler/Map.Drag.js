@@ -213,7 +213,6 @@ export var Drag = Handler.extend({
 
 			if (!offset.x && !offset.y) {
 				map.fire('moveend');
-
 			} else {
 				offset = map._limitOffset(offset, map.options.maxBounds);
 

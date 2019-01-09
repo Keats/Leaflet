@@ -125,7 +125,8 @@ export var DivOverlay = Layer.extend({
 	getEvents: function () {
 		var events = {
 			zoom: this._updatePosition,
-			viewreset: this._updatePosition
+			viewreset: this._updatePosition,
+			rotate: this._updatePosition,
 		};
 
 		if (this._zoomAnimated) {
@@ -183,6 +184,9 @@ export var DivOverlay = Layer.extend({
 		    anchor = this._getAnchor();
 
 		if (this._zoomAnimated) {
+			if (this._map._rotate) {
+				pos = this._map.rotatedPointToMapPanePoint(pos);
+			}
 			DomUtil.setPosition(this._container, pos.add(anchor));
 		} else {
 			offset = offset.add(pos).add(anchor);

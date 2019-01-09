@@ -127,7 +127,8 @@ export var Marker = Layer.extend({
 	getEvents: function () {
 		return {
 			zoom: this.update,
-			viewreset: this.update
+			viewreset: this.update,
+			rotate: this.update,
 		};
 	},
 
@@ -277,10 +278,14 @@ export var Marker = Layer.extend({
 	},
 
 	_setPos: function (pos) {
-		DomUtil.setPosition(this._icon, pos);
+		if (this._map._rotate) {
+			pos = this._map.rotatedPointToMapPanePoint(pos);
+		}
+
+		DomUtil.setPosition(this._icon, pos, 0, pos);
 
 		if (this._shadow) {
-			DomUtil.setPosition(this._shadow, pos);
+			DomUtil.setPosition(this._shadow, pos, 0, pos);
 		}
 
 		this._zIndex = pos.y + this.options.zIndexOffset;
@@ -289,7 +294,7 @@ export var Marker = Layer.extend({
 	},
 
 	_updateZIndex: function (offset) {
-		this._icon.style.zIndex = this._zIndex + offset;
+		this._icon.style.zIndex = Math.round(this._zIndex + offset);
 	},
 
 	_animateZoom: function (opt) {

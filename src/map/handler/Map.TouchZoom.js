@@ -29,11 +29,14 @@ Map.mergeOptions({
 export var TouchZoom = Handler.extend({
 	addHooks: function () {
 		DomUtil.addClass(this._map._container, 'leaflet-touch-zoom');
+		this._map.touchGestures.enable();
+		this._map.touchGestures.zoom = true;
 		DomEvent.on(this._map._container, 'touchstart', this._onTouchStart, this);
 	},
 
 	removeHooks: function () {
 		DomUtil.removeClass(this._map._container, 'leaflet-touch-zoom');
+		this._map.touchGestures.zoom = false;
 		DomEvent.off(this._map._container, 'touchstart', this._onTouchStart, this);
 	},
 

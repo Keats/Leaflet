@@ -120,12 +120,17 @@ export var Map = Evented.extend({
 
 		// @option trackResize: Boolean = true
 		// Whether the map automatically handles browser window resize to update itself.
-		trackResize: true
+		trackResize: true,
+
+		rotate: false,
 	},
 
 	initialize: function (id, options) { // (HTMLElement or String, Object)
 		options = Util.setOptions(this, options);
-
+		if (options.rotate) {
+			this._rotate = true;
+			this._bearing = 0;
+		}
 		// Make sure to assign internal flags at the beginning,
 		// to avoid inconsistent state in some edge cases.
 		this._handlers = [];
@@ -1092,6 +1097,43 @@ export var Map = Evented.extend({
 		return this.layerPointToLatLng(this.mouseEventToLayerPoint(e));
 	},
 
+	// rotation methods
+		// setBearing will work with just the 'theta' parameter.
+	setBearing: function (theta) {
+		if (!Browser.any3d || !this._rotate) { return; }
+
+		var rotatePanePos = this._getRotatePanePos();
+		var halfSize = this.getSize().divideBy(2);
+		this._pivot = this._getMapPanePos().clone().multiplyBy(-1).add(halfSize);
+
+		rotatePanePos = rotatePanePos.rotateFrom(-this._bearing, this._pivot);
+
+		this._bearing = theta * DomUtil.DEG_TO_RAD; // TODO: mod 360
+		this._rotatePanePos = rotatePanePos.rotateFrom(this._bearing, this._pivot);
+
+		DomUtil.setPosition(this._rotatePane, rotatePanePos, this._bearing, this._pivot);
+
+		this.fire('rotate');
+	},
+		getBearing: function () {
+		return this._bearing * DomUtil.RAD_TO_DEG;
+	},
+	_getRotatePanePos: function () {
+		return this._rotatePanePos || new Point(0, 0);
+	},
+	// @method rotatedPointToMapPanePoint(point: Point): Point
+	// Converts a coordinate from the rotated pane reference system
+	// to the reference system of the not rotated map pane.
+	rotatedPointToMapPanePoint: function (point) {
+		return toPoint(point).rotate(this._bearing)._add(this._getRotatePanePos());
+	},
+
+	// @method mapPanePointToRotatedPoint(point: Point): Point
+	// Converts a coordinate from the not rotated map pane reference system
+	// to the reference system of the rotated pane.
+	mapPanePointToRotatedPoint: function (point) {
+		return toPoint(point)._subtract(this._getRotatePanePos()).rotate(-this._bearing);
+	},
 
 	// map initialization methods
 
@@ -1152,24 +1194,49 @@ export var Map = Evented.extend({
 		this._mapPane = this.createPane('mapPane', this._container);
 		DomUtil.setPosition(this._mapPane, new Point(0, 0));
 
-		// @pane tilePane: HTMLElement = 200
-		// Pane for `GridLayer`s and `TileLayer`s
-		this.createPane('tilePane');
-		// @pane overlayPane: HTMLElement = 400
-		// Pane for vectors (`Path`s, like `Polyline`s and `Polygon`s), `ImageOverlay`s and `VideoOverlay`s
-		this.createPane('shadowPane');
-		// @pane shadowPane: HTMLElement = 500
-		// Pane for overlay shadows (e.g. `Marker` shadows)
-		this.createPane('overlayPane');
-		// @pane markerPane: HTMLElement = 600
-		// Pane for `Icon`s of `Marker`s
-		this.createPane('markerPane');
-		// @pane tooltipPane: HTMLElement = 650
-		// Pane for `Tooltip`s.
-		this.createPane('tooltipPane');
-		// @pane popupPane: HTMLElement = 700
-		// Pane for `Popup`s.
-		this.createPane('popupPane');
+		if (this._rotate) {
+			this._rotatePane = this.createPane('rotatePane', this._mapPane);
+			this._norotatePane = this.createPane('norotatePane', this._mapPane);
+
+			// @pane tilePane: HTMLElement = 2
+			// Pane for tile layers
+			this.createPane('tilePane', this._rotatePane);
+			// @pane overlayPane: HTMLElement = 4
+			// Pane for overlays like polylines and polygons
+			this.createPane('overlayPane', this._rotatePane);
+
+			// @pane shadowPane: HTMLElement = 5
+			// Pane for overlay shadows (e.g. marker shadows)
+			this.createPane('shadowPane', this._norotatePane);
+			// @pane markerPane: HTMLElement = 6
+			// Pane for marker icons
+			this.createPane('markerPane', this._norotatePane);
+			// @pane tooltipPane: HTMLElement = 650
+			// Pane for tooltips.
+			this.createPane('tooltipPane', this._norotatePane);
+			// @pane popupPane: HTMLElement = 700
+			// Pane for popups.
+			this.createPane('popupPane', this._norotatePane);
+		} else {
+			// @pane tilePane: HTMLElement = 200
+			// Pane for `GridLayer`s and `TileLayer`s
+			this.createPane('tilePane');
+			// @pane overlayPane: HTMLElement = 400
+			// Pane for vectors (`Path`s, like `Polyline`s and `Polygon`s), `ImageOverlay`s and `VideoOverlay`s
+			this.createPane('shadowPane');
+			// @pane shadowPane: HTMLElement = 500
+			// Pane for overlay shadows (e.g. `Marker` shadows)
+			this.createPane('overlayPane');
+			// @pane markerPane: HTMLElement = 600
+			// Pane for `Icon`s of `Marker`s
+			this.createPane('markerPane');
+			// @pane tooltipPane: HTMLElement = 650
+			// Pane for `Tooltip`s.
+			this.createPane('tooltipPane');
+			// @pane popupPane: HTMLElement = 700
+			// Pane for `Popup`s.
+			this.createPane('popupPane');
+		}
 
 		if (!this.options.markerZoomAnimation) {
 			DomUtil.addClass(panes.markerPane, 'leaflet-zoom-hide');
@@ -1231,7 +1298,7 @@ export var Map = Evented.extend({
 
 		this._zoom = zoom;
 		this._lastCenter = center;
-		this._pixelOrigin = this._getNewPixelOrigin(center);
+		this._pixelOrigin = this._getNewPixelOrigin(center, zoom, zoomChanged);
 
 		// @event zoom: Event
 		// Fired repeatedly during any change in zoom level, including zoom
@@ -1481,9 +1548,21 @@ export var Map = Evented.extend({
 		return pixelOrigin.subtract(this._getMapPanePos());
 	},
 
-	_getNewPixelOrigin: function (center, zoom) {
+	_getNewPixelOrigin: function (center, zoom, zoomChanged = false) {
 		var viewHalf = this.getSize()._divideBy(2);
-		return this.project(center, zoom)._subtract(viewHalf)._add(this._getMapPanePos())._round();
+		if (this._rotate && zoomChanged && this._bearing) {
+			return this.project(center, undefined)
+				.rotate(this._bearing)
+				._subtract(viewHalf)
+				._add(this._getMapPanePos())
+				._add(this._getRotatePanePos())
+				.rotate(-this._bearing);
+		} else {
+			return this.project(center, zoom)
+				._subtract(viewHalf)
+				._add(this._getMapPanePos())
+				._round();
+		}
 	},
 
 	_latLngToNewLayerPoint: function (latlng, zoom, center) {
@@ -1508,7 +1587,11 @@ export var Map = Evented.extend({
 
 	// offset of the specified place to the current center in pixels
 	_getCenterOffset: function (latlng) {
-		return this.latLngToLayerPoint(latlng).subtract(this._getCenterLayerPoint());
+		var centerOffset = this.latLngToLayerPoint(latlng).subtract(this._getCenterLayerPoint());
+		if (this._rotate) {
+			centerOffset = centerOffset.rotate(this._bearing);
+		}
+		return centerOffset;
 	},
 
 	// adjust center for view to get inside bounds
